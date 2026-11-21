@@ -1,73 +1,84 @@
-# INSTRUCTIONS:
-# 1. Open a "Terminal" by: View --> Terminal OR just the "Terminal" through the hamburger menu
-# 2. run in terminal with: streamlit run streamlit_app.py
-# 3. click the "Open in Browser" link that pops up OR click on "Ports" and copy the URL
-# 4. Open a Simple Browswer with View --> Command Palette --> Simple Browser: Show
-# 5. use the URL from prior steps as intput into this simple browser
-
-
+import pandas as pd
 import streamlit as st
 import altair as alt
- 
-st.title('Streamlit App for IS445: ID19894')
 
-st.text("The URL for this app is: https://ananyakavatekar-is445-lab8.streamlit.app/")
-st.text("The URL for its GitHub repo is: https://github.com/ananyakavatekar/is445_streamlit_demo")
+data = pd.read_csv("https://raw.githubusercontent.com/UIUC-iSchool-DataViz/is445_data/main/building_inventory.csv")
 
-source = "https://cdn.jsdelivr.net/npm/vega-datasets@v1.29.0/data/seattle-weather.csv"
+st.title("Illinois Building Composition")
 
-scale = alt.Scale(
-    domain=["sun", "fog", "drizzle", "rain", "snow"],
-    range=["#e7ba52", "#a7a7a7", "#aec7e8", "#1f77b4", "#9467bd"],
-)
-color = alt.Color("weather:N", scale=scale)
+st.write("This report explores the distribution and attributes of buildings in Illinois")
 
-# We create two selections:
-# - a brush that is active on the top panel
-# - a multi-click that is active on the bottom panel
-brush = alt.selection_interval(encodings=["x"])
-click = alt.selection_point(encodings=["color"])
+# viz 1: Dist of buildings by county
 
-# Top panel is scatter plot of temperature vs time
-points = (
-    alt.Chart()
-    .mark_point()
-    .encode(
-        alt.X("monthdate(date):T", title="Date (Month Year)"),
-        alt.Y(
-            "temp_max:Q",
-            title="Maximum Daily Temperature (C)",
-            scale=alt.Scale(domain=[-5, 40]),
-        ),
-        color=alt.condition(brush, color, alt.value("lightgray")),
-        size=alt.Size("precipitation:Q", scale=alt.Scale(range=[5, 200])),
-    )
-    .properties(width=550, height=300)
-    .add_params(brush)
-    .transform_filter(click)
+st.header("Building Count by County in Illinois")
+
+building_count_by_county = data["County"].value_counts().reset_index()
+
+# naming cols to make it easier to call later
+building_count_by_county.columns = ["County", "Count"]
+
+
+# number of counties (top to bottom)
+num_counties = building_count_by_county.shape[0]
+county_count = st.slider("Number of Counties: ", 1, num_counties, 10)
+
+counties_to_show = building_count_by_county.head(county_count)
+
+viz_1 = alt.Chart(counties_to_show).mark_bar(color="steelblue").encode(
+    x=alt.X("Count:Q", title="Building Count"),
+    y=alt.Y("County:N", sort="-x", title="County"),
+    tooltip=["County", "Count"]
+).properties(
+    title="Number of Buildings by County"
 )
 
-# Bottom panel is a bar chart of weather type
-bars = (
-    alt.Chart()
-    .mark_bar()
-    .encode(
-        x="count()",
-        y="weather:N",
-        color=alt.condition(click, color, alt.value("lightgray")),
-    )
-    .transform_filter(brush)
-    .properties(
-        width=550,
-    )
-    .add_params(click)
+st.altair_chart(viz_1)
+
+
+st.write("""
+The visualization above showcases the distribution of buildings in Illinois based on the county they are located in.
+I chose to make the visualization a horizontal bar graph so that building counts by county would be easier to compare and there
+is adequate space for the county names. I made the color a simple blue so that users can focus on the relative differences in building counts.
+The interactive element added to this visualization is a slider that allows viewers to alter the
+number of counties whose building counts are showcased. I made the minimum county count 1 and the maximum the total number
+of counties and the default county count is 10.
+If I had more time, I would add a feature that allows users to select specific counties to compare.
+""")
+
+# viz 2 building construction by decade
+
+st.header("Number of Buildings Constructed by Decade in Illinois.")
+
+# make sure construction years are numeric
+data["Year Constructed"] = pd.to_numeric(data["Year Constructed"], errors="coerce")
+
+years = data[data["Year Constructed"].between(1800, 2026)].copy()
+
+# group years into decades
+years["Decade"] = (years["Year Constructed"] // 10 * 10).astype(int)
+
+# count buildings by decade
+building_count_by_decade = years["Decade"].value_counts().sort_index().reset_index()
+
+building_count_by_decade.columns = ["Decade", "Count"]
+
+viz_2 = alt.Chart(building_count_by_decade).mark_line(
+    point=True, color="steelblue"
+).encode(
+    x=alt.X("Decade:Q", title="Construction Decade"),
+    y=alt.Y("Count:Q", title="Building Count"),
+    tooltip=["Decade", "Count"]
+).properties(
+    title="Number of Buildings Constructed by Decade"
 )
 
-chart = alt.vconcat(points, bars, data=source, title="Seattle Weather - 2003 to 2012")
+st.altair_chart(viz_2)
 
-tab1, tab2 = st.tabs(["Streamlit theme (default)", "Altair native theme"])
-
-with tab1:
-    st.altair_chart(chart, theme="streamlit", use_container_width=True)
-with tab2:
-    st.altair_chart(chart, theme=None, use_container_width=True)
+st.write("""
+The visualization above showcases the number of buildings in the Illinois Building Inventory constructed by decade.
+I did this by grouping the construction year variable into decade intervals and then mapping it onto a line chart.
+I chose a line chart particularly because it helps highlight the overall trend across time (whether there was
+growth, decline, or stagnation in the construction count).
+I once again made this visualization a simple blue so viewers can focus on interpreting the trend.
+For future versions, I would add a dropdown to allow users to compare the construction trend based by county.
+""")
